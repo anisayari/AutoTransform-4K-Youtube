@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Setup | 4K Thumbnail Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+
+      <div class="setup-layout">
+        <section class="panel setup-hero">
+          <div class="eyebrow">Premiere ouverture</div>
+          <h1>Setup rapide</h1>
+          <p class="hero-copy">
+            Configure Gemini et l'OAuth Google une fois, puis l'app pourra transformer les miniatures
+            choisies et les remettre directement sur ta chaîne YouTube.
+          </p>
+
+          {% if setup_message %}
+            <div class="hero-alert hero-alert-success">
+              <strong>{{ setup_message }}</strong>
+            </div>
+          {% endif %}
+
+          {% if setup_error %}
+            <div class="hero-alert">
+              <strong>{{ setup_error }}</strong>
+            </div>
+          {% endif %}
+
+          <div class="status-strip">
+            <span class="pill {{ 'pill-live' if auth_status.geminiConfigured else '' }}">
+              {{ 'Gemini prêt' if auth_status.geminiConfigured else 'Clé Gemini manquante' }}
+            </span>
+            <span class="pill {{ 'pill-live' if auth_status.clientSecretsPresent else '' }}">
+              {{ 'client_secret.json prêt' if auth_status.clientSecretsPresent else 'client_secret.json manquant' }}
+            </span>
+            <span class="pill {{ 'pill-live' if auth_status.setupComplete else '' }}">
+              {{ 'Setup terminé' if auth_status.setupComplete else 'Setup incomplet' }}
+            </span>
+          </div>
+
+          <div class="setup-checklist">
+            <div class="setup-step">
+              <span class="setup-step-index">1</span>
+              <div>
+                <strong>Ajoute ta clé Gemini</strong>
+                <p>Elle sert uniquement à transformer les images.</p>
+              </div>
+            </div>
+            <div class="setup-step">
+              <span class="setup-step-index">2</span>
+              <div>
+                <strong>Uploade ton <code>client_secret.json</code></strong>
+                <p>Le fichier doit venir d'un client OAuth Google de type <em>Web application</em>.</p>
+              </div>
+            </div>
+            <div class="setup-step">
+              <span class="setup-step-index">3</span>
+              <div>
+                <strong>Connecte YouTube</strong>
+                <p>Une fois le setup prêt, tu lances l'OAuth et l'app pourra réuploader sur ta chaîne.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="setup-stack">
+          <section class="panel setup-card">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Etape 1</p>
+                <h2>Clé Gemini</h2>
+              </div>
+              <span class="pill {{ 'pill-live' if auth_status.geminiConfigured else '' }}">
+                {{ 'Enregistrée' if auth_status.geminiConfigured else 'A enregistrer' }}
+              </span>
+            </div>
+
+            <form method="post" action="{{ url_for('app.setup_gemini') }}" class="setup-form">
+              <label class="setup-label" for="gemini_api_key">Gemini API key</label>
+              <input
+                id="gemini_api_key"
+                name="gemini_api_key"
+                class="setup-input"
+                type="password"
+                placeholder="AIza..."
+                autocomplete="off"
+              >
+              <p class="setup-hint">
+                La clé sera enregistrée dans <code>{{ auth_status.envPath }}</code>.
+              </p>
+              <button class="primary-button" type="submit">Enregistrer la clé</button>
+            </form>
+          </section>
+
+          <section class="panel setup-card">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Etape 2</p>
+                <h2>OAuth Google</h2>
+              </div>
+              <span class="pill {{ 'pill-live' if auth_status.clientSecretsPresent else '' }}">
+                {{ 'Fichier trouvé' if auth_status.clientSecretsPresent else 'Fichier manquant' }}
+              </span>
+            </div>
+
+            <div class="setup-info-grid">
+              <div class="setup-info-box">
+                <span class="meta-label">Authorized JavaScript origins</span>
+                <code>{{ auth_status.redirectOrigin }}</code>
+              </div>
+              <div class="setup-info-box">
+                <span class="meta-label">Authorized redirect URIs</span>
+                <code>{{ auth_status.redirectUri }}</code>
+              </div>
+              <div class="setup-info-box">
+                <span class="meta-label">Destination locale</span>
+                <code>{{ auth_status.clientSecretsPath }}</code>
+              </div>
+            </div>
+
+            <form method="post" action="{{ url_for('app.setup_google_client_secret') }}" enctype="multipart/form-data" class="setup-form">
+              <label class="setup-label" for="client_secret_file">Fichier client_secret.json</label>
+              <input id="client_secret_file" name="client_secret_file" class="setup-input setup-file" type="file" accept=".json,application/json">
+              <p class="setup-hint">
+                Dans Google Cloud Console: Credentials -> OAuth 2.0 Client IDs -> télécharge le JSON
+                du client <em>Web application</em>.
+              </p>
+              <button class="primary-button" type="submit">Uploader le fichier OAuth</button>
+            </form>
+          </section>
+
+          <section class="panel setup-card setup-final-card">
+            <div class="panel-header">
+              <div>
+                <p class="panel-kicker">Etape 3</p>
+                <h2>Connexion YouTube</h2>
+              </div>
+            </div>
+
+            <p class="panel-note">
+              Quand les deux blocs au-dessus sont verts, tu peux lancer l'OAuth Google puis ouvrir
+              le studio principal.
+            </p>
+
+            <div class="hero-actions">
+              {% if auth_status.clientSecretsPresent %}
+                <a class="primary-button" href="{{ url_for('app.auth_google_start') }}">Connecter YouTube</a>
+              {% else %}
+                <button class="primary-button button-disabled" type="button" disabled>
+                  Connecter YouTube
+                </button>
+              {% endif %}
+
+              {% if auth_status.setupComplete %}
+                <a class="ghost-button" href="{{ url_for('app.index') }}">Ouvrir le studio</a>
+              {% else %}
+                <button class="ghost-button button-disabled" type="button" disabled>Ouvrir le studio</button>
+              {% endif %}
+            </div>
+          </section>
+        </section>
+      </div>
+    </div>
+  </body>
+</html>

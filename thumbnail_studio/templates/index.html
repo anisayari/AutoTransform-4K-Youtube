@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>4K Thumbnail Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+  </head>
+  <body>
+    <div class="page-shell">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+
+      <header class="hero">
+        <div class="eyebrow">YouTube thumbnail pipeline</div>
+        <h1>4K Thumbnail Studio</h1>
+        <p class="hero-copy">
+          Télécharge tes thumbnails YouTube, repasse-les via Gemini image, puis réapplique-les
+          automatiquement sur la vidéo avec l’API officielle.
+        </p>
+
+        <div class="hero-actions">
+          <a class="primary-button" href="{{ url_for('app.auth_google_start') }}">Connecter YouTube</a>
+          <a class="ghost-button" href="{{ url_for('app.setup') }}">Setup</a>
+          <button id="disconnectButton" class="ghost-button" type="button">Déconnecter</button>
+        </div>
+
+        <div class="status-strip">
+          <span class="pill {{ 'pill-live' if auth_status.connected else '' }}">
+            {{ 'YouTube connecté' if auth_status.connected else 'YouTube non connecté' }}
+          </span>
+          <span class="pill {{ 'pill-live' if auth_status.clientSecretsPresent else '' }}">
+            {{ 'client_secret.json trouvé' if auth_status.clientSecretsPresent else 'client_secret.json manquant' }}
+          </span>
+          <span class="pill {{ 'pill-live' if auth_status.geminiConfigured else '' }}">
+            {{ 'Gemini configuré' if auth_status.geminiConfigured else 'GEMINI_API_KEY manquant' }}
+          </span>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="control-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Prompt global</p>
+              <h2>Style de transformation</h2>
+            </div>
+            <div class="panel-actions">
+              <button id="refreshButton" class="ghost-button" type="button">Rafraîchir les vidéos</button>
+              <button id="transformSelectionButton" class="primary-button" type="button">
+                Transformer la sélection
+              </button>
+            </div>
+          </div>
+
+          <textarea id="promptInput" class="prompt-input">{{ default_prompt }}</textarea>
+
+          <div class="selection-panel">
+            <div>
+              <span class="meta-label">Sélection</span>
+              <strong id="selectionSummary">0 vidéo sélectionnée</strong>
+            </div>
+            <div class="selection-actions">
+              <button id="selectVisibleButton" class="ghost-button" type="button">Tout sélectionner</button>
+              <button id="clearSelectionButton" class="ghost-button" type="button">Vider</button>
+            </div>
+          </div>
+
+          <div class="panel-meta">
+            <div>
+              <span class="meta-label">Flux</span>
+              <strong>API YouTube + fallback pytube + Gemini image</strong>
+            </div>
+            <div>
+              <span class="meta-label">Upload final</span>
+              <strong>1280x720 optimisé pour YouTube</strong>
+            </div>
+          </div>
+
+          <p class="panel-note">
+            Le modèle peut générer un master 4K, mais YouTube accepte surtout un thumbnail léger.
+            L’app garde la version générée et prépare automatiquement une version uploadable.
+          </p>
+        </section>
+
+        <section class="videos-panel panel">
+          <div class="panel-header">
+            <div>
+              <p class="panel-kicker">Vidéos</p>
+              <h2 id="channelTitle">Connexion requise</h2>
+            </div>
+            <span id="videoCount" class="pill">0 vidéo</span>
+          </div>
+
+          <div id="feedback" class="feedback"></div>
+          <div id="videosGrid" class="videos-grid"></div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      window.APP_BOOTSTRAP = {
+        connected: {{ 'true' if auth_status.connected else 'false' }},
+        geminiConfigured: {{ 'true' if auth_status.geminiConfigured else 'false' }}
+      };
+    </script>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </body>
+</html>

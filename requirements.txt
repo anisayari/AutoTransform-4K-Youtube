@@ -1,0 +1,10 @@
+Flask>=3.1,<4
+google-api-python-client>=2.165
+google-auth>=2.38
+google-auth-oauthlib>=1.2
+google-genai>=1.7
+Pillow>=11.1
+pytube>=15.0
+python-dotenv>=1.0
+requests>=2.32
+pytest>=8.3

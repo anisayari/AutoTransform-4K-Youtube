@@ -1,0 +1,10 @@
+.env
+.pytest_cache/
+.venv/
+__pycache__/
+*.pyc
+instance/youtube_token.json
+instance/media/downloads/*
+instance/media/generated/*
+!instance/media/downloads/.gitkeep
+!instance/media/generated/.gitkeep
