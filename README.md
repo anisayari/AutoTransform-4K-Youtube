@@ -2,7 +2,16 @@
 
 ![YouTube 4K thumbnail update](docs/assets/youtube-4k-thumbnail-update.svg)
 
-> Note as of March 15, 2026: YouTube announced on October 29, 2025 that thumbnail uploads were moving from 2 MB to 50 MB, but the YouTube Data API `thumbnails.set` flow still returns a 2 MB cap in practice (`MediaUploadSizeError: 2097152`). This repo keeps the 50 MB / 4K direction at the center, but automated API uploads are still limited by the current API behavior until Google updates that endpoint.
+> ⚠️ **WARNING / LIMITATION FOR NOW**
+>
+> YouTube announced on **October 29, 2025** that thumbnail uploads were moving from **2 MB** to **50 MB**.
+>
+> ✅ This repo is built around that **50 MB / 4K** direction.
+>
+> ⚠️ But as of **March 15, 2026**, the YouTube Data API endpoint `thumbnails.set` can still return a practical **2 MB** limit:
+> `MediaUploadSizeError: 2097152`
+>
+> 🛠️ So for now, the product direction is **4K / 50 MB**, but the automated upload step is still waiting for YouTube to fully update the API side too.
 
 YouTube raised thumbnail uploads from 2 MB to 50 MB. That changes the job of this app.
 
@@ -10,17 +19,29 @@ This project is a small Flask studio for pulling thumbnails from your YouTube vi
 
 The update above is based on YouTube's own announcement and Neal Mohan's post:
 
-- [YouTube Blog: 5 new features to help creators shine on TV screens](https://blog.youtube/news-and-events/new-features-to-help-creators/)
-- [Neal Mohan post mirror](https://twstalker.com/nealmohan/status/1983586662560231444)
+- 📢 [YouTube Blog: 5 new features to help creators shine on TV screens](https://blog.youtube/news-and-events/new-features-to-help-creators/)
+- 📣 [Neal Mohan post mirror](https://twstalker.com/nealmohan/status/1983586662560231444)
+
+## Interface
+
+### Setup
+
+![Setup screen](docs/screenshots/setup-screen.png)
+
+### Studio
+
+![Studio screen](docs/screenshots/studio-screen.png)
+
+The main studio view once videos are loaded and ready for selection.
 
 ## What it does
 
 - Loads the videos from your channel through the official YouTube Data API
 - Pulls the current thumbnail through the official API, with `pytube` as fallback
 - Sends the image to a configurable Gemini image model
-- Saves a local 4K master in `instance/media/generated/`
-- Prepares a 4K upload-ready JPEG under YouTube's current file size limit
-- Uploads the upgraded thumbnail back to YouTube with `thumbnails.set`
+- 💾 Saves a local 4K master in `instance/media/generated/`
+- 🖼️ Prepares a 4K upload-ready JPEG
+- 🚀 Uploads the upgraded thumbnail back to YouTube with `thumbnails.set`
 
 This is built for batch work. If you want to refresh a backlog of thumbnails now that 4K uploads are practical, this is the workflow.
 
