@@ -2,6 +2,8 @@
 
 ![YouTube 4K thumbnail update](docs/assets/youtube-4k-thumbnail-update.svg)
 
+> Note as of March 15, 2026: YouTube announced on October 29, 2025 that thumbnail uploads were moving from 2 MB to 50 MB, but the YouTube Data API `thumbnails.set` flow still returns a 2 MB cap in practice (`MediaUploadSizeError: 2097152`). This repo keeps the 50 MB / 4K direction at the center, but automated API uploads are still limited by the current API behavior until Google updates that endpoint.
+
 YouTube raised thumbnail uploads from 2 MB to 50 MB. That changes the job of this app.
 
 This project is a small Flask studio for pulling thumbnails from your YouTube videos, upgrading them with Gemini, and pushing 4K-ready versions back to YouTube in batches. You pick the videos. The app does the repetitive part.

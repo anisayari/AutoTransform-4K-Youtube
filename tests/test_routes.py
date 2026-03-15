@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -51,6 +52,8 @@ def test_index_renders(client):
 
     assert response.status_code == 200
     assert b"4K Thumbnail Studio" in response.data
+    assert b"Before you continue" in response.data
+    assert b"data-oauth-warning-link" in response.data
 
 
 def test_setup_prefills_existing_gemini_key_as_hidden_input(client):
@@ -59,6 +62,7 @@ def test_setup_prefills_existing_gemini_key_as_hidden_input(client):
     assert response.status_code == 200
     assert b'aria-label="Show Gemini API key"' in response.data
     assert b'value="test-gemini-key"' in response.data
+    assert b"Before you continue" in response.data
 
 
 def test_setup_hides_dropzone_when_client_secret_already_exists(client):
@@ -267,6 +271,146 @@ def test_api_batch_transform_processes_only_selected_videos(
         assert (app.config["APP_SETTINGS"].generated_dir / "video-1_youtube_upload.jpg").exists()
 
 
+def test_api_transform_jobs_queues_async_batch(client, monkeypatch: pytest.MonkeyPatch):
+    captured: dict[str, object] = {}
+
+    class FakeJobStore:
+        def create_transform_job(self, *, prompt, videos, runner):
+            captured["prompt"] = prompt
+            captured["videos"] = videos
+            captured["runner"] = runner
+            return {
+                "jobId": "job-123",
+                "status": "queued",
+                "message": "Queued 2 thumbnail transform(s).",
+                "videoIds": ["video-1", "video-2"],
+                "currentVideoId": None,
+                "currentVideoTitle": None,
+                "totalCount": 2,
+                "completedCount": 0,
+                "successCount": 0,
+                "failureCount": 0,
+                "processed": [],
+                "failed": [],
+                "createdAt": "2026-03-15T10:00:00+00:00",
+                "updatedAt": "2026-03-15T10:00:00+00:00",
+            }
+
+    monkeypatch.setattr("thumbnail_studio.routes.load_credentials", lambda _settings: FakeCredentials())
+    monkeypatch.setattr("thumbnail_studio.routes.YouTubeService", lambda settings, credentials: object())
+    monkeypatch.setattr("thumbnail_studio.routes.GeminiService", lambda settings: object())
+    monkeypatch.setattr("thumbnail_studio.routes.job_store", FakeJobStore())
+
+    response = client.post(
+        "/api/transform-jobs",
+        json={
+            "prompt": "keep the same thumbnail and regenerate it in 4K only",
+            "videos": [
+                {
+                    "id": "video-1",
+                    "title": "Video 1",
+                    "officialThumbnailUrl": "https://example.com/1.jpg",
+                    "pytubeThumbnailUrl": None,
+                },
+                {
+                    "id": "video-2",
+                    "title": "Video 2",
+                    "officialThumbnailUrl": None,
+                    "pytubeThumbnailUrl": "https://example.com/2.jpg",
+                },
+            ],
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json["ok"] is True
+    assert response.json["jobId"] == "job-123"
+    assert response.json["videoIds"] == ["video-1", "video-2"]
+    assert response.json["estimatedCostUsd"] == pytest.approx(0.302)
+    assert captured["prompt"] == "keep the same thumbnail and regenerate it in 4K only"
+    assert len(captured["videos"]) == 2
+
+
+def test_api_transform_job_status_serializes_generated_urls(client, monkeypatch: pytest.MonkeyPatch):
+    class FakeJobStore:
+        def get_job(self, job_id):
+            assert job_id == "job-123"
+            return {
+                "jobId": "job-123",
+                "status": "completed",
+                "message": "1 thumbnails uploaded to YouTube.",
+                "videoIds": ["video-1"],
+                "currentVideoId": None,
+                "currentVideoTitle": None,
+                "totalCount": 1,
+                "completedCount": 1,
+                "successCount": 1,
+                "failureCount": 0,
+                "processed": [
+                    {
+                        "videoId": "video-1",
+                        "sourceUsed": "official",
+                        "archiveFilename": "video-1_generated_4k.jpg",
+                        "uploadReadyFilename": "video-1_youtube_upload.jpg",
+                        "model": "fake-image-model",
+                        "notes": None,
+                    }
+                ],
+                "failed": [],
+                "createdAt": "2026-03-15T10:00:00+00:00",
+                "updatedAt": "2026-03-15T10:01:00+00:00",
+            }
+
+    monkeypatch.setattr("thumbnail_studio.routes.job_store", FakeJobStore())
+
+    response = client.get("/api/transform-jobs/job-123")
+
+    assert response.status_code == 200
+    assert response.json["ok"] is True
+    assert response.json["processed"][0]["videoId"] == "video-1"
+    assert response.json["processed"][0]["notes"] is None
+    assert response.json["processed"][0]["uploadReadyUrl"].endswith(
+        "/media/generated/video-1_youtube_upload.jpg"
+    )
+
+
+def test_api_transform_job_status_includes_failure_log(client, monkeypatch: pytest.MonkeyPatch):
+    class FakeJobStore:
+        def get_job(self, job_id):
+            assert job_id == "job-123"
+            return {
+                "jobId": "job-123",
+                "status": "failed",
+                "message": "No selected thumbnail could be updated.",
+                "videoIds": ["video-1"],
+                "currentVideoId": None,
+                "currentVideoTitle": None,
+                "totalCount": 1,
+                "completedCount": 1,
+                "successCount": 0,
+                "failureCount": 1,
+                "processed": [],
+                "failed": [
+                    {
+                        "videoId": "video-1",
+                        "message": "Gemini blocked this thumbnail request (OTHER).",
+                        "log": "Summary\nGemini blocked this thumbnail request (OTHER).\n\nContext\nPrompt feedback block reason: OTHER",
+                    }
+                ],
+                "createdAt": "2026-03-15T10:00:00+00:00",
+                "updatedAt": "2026-03-15T10:01:00+00:00",
+            }
+
+    monkeypatch.setattr("thumbnail_studio.routes.job_store", FakeJobStore())
+
+    response = client.get("/api/transform-jobs/job-123")
+
+    assert response.status_code == 200
+    assert response.json["ok"] is True
+    assert response.json["failed"][0]["videoId"] == "video-1"
+    assert "Prompt feedback block reason: OTHER" in response.json["failed"][0]["log"]
+
+
 def test_setup_gemini_saves_key_in_env_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -461,3 +605,17 @@ def test_auth_google_callback_allows_local_http_transport(
     assert captured["authorization_response"].startswith("http://localhost/")
     assert captured["saved"].endswith("youtube_token.json")
     assert "OAUTHLIB_INSECURE_TRANSPORT" in os.environ
+
+
+def test_app_logging_writes_to_log_file(app):
+    log_file = app.config["APP_SETTINGS"].app_log_file
+    logger = logging.getLogger("thumbnail_studio.tests")
+
+    logger.info("test log write")
+
+    for handler in logging.getLogger("thumbnail_studio").handlers:
+        if hasattr(handler, "flush"):
+            handler.flush()
+
+    assert log_file.exists()
+    assert "test log write" in log_file.read_text(encoding="utf-8")

@@ -35,7 +35,7 @@
 
         <div class="topbar-actions">
           {% if not auth_status.connected %}
-          <a class="btn btn-primary btn-sm" href="{{ url_for('app.auth_google_start') }}">
+          <a class="btn btn-primary btn-sm" href="{{ url_for('app.auth_google_start') }}" data-oauth-warning-link>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
             Connect
           </a>
@@ -56,8 +56,8 @@
       <div class="studio">
         <aside class="sidebar">
           <div class="sidebar-section">
-            <div class="sidebar-title">Transformation prompt</div>
-            <textarea id="promptInput" class="prompt-area" placeholder="Describe the 4K thumbnail look you want...">{{ default_prompt }}</textarea>
+            <div class="sidebar-title">4K prompt</div>
+            <textarea id="promptInput" class="prompt-area" placeholder="Keep this exact thumbnail and regenerate it in 4K only.">{{ default_prompt }}</textarea>
           </div>
 
           <div class="sidebar-section">
@@ -74,8 +74,19 @@
             <div class="mt-md" style="display:flex;gap:8px">
               <button id="transformSelectionButton" class="btn btn-primary flex-1" type="button" disabled>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                Transform selection
+                Queue selection
               </button>
+            </div>
+            <div class="cost-panel mt-md">
+              <div class="cost-row">
+                <span class="cost-label">Per 4K image</span>
+                <strong id="costPerImage" class="cost-value">$0.00</strong>
+              </div>
+              <div class="cost-row">
+                <span class="cost-label">Selected total</span>
+                <strong id="selectionCost" class="cost-value">$0.00</strong>
+              </div>
+              <p class="form-hint mt-sm">Estimate based on the current published Gemini Developer API 4K image price. Input tokens can vary slightly.</p>
             </div>
             <div id="batchProgress" class="mt-md" style="display:none">
               <div class="progress-bar"><div id="batchProgressFill" class="progress-fill" style="width:0%"></div></div>
@@ -92,6 +103,10 @@
             <div class="info-row">
               <span class="info-label">AI model</span>
               <span class="info-value">Gemini</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Generation mode</span>
+              <span class="info-value">Same image -> 4K only</span>
             </div>
             <div class="info-row">
               <span class="info-label">Upload target</span>
@@ -125,13 +140,39 @@
     </div>
 
     <div id="toastContainer" class="toast-container"></div>
+    <div class="modal-backdrop" data-log-modal aria-hidden="true">
+      <div class="modal-card modal-card-log" role="dialog" aria-modal="true" aria-labelledby="jobLogTitle">
+        <div class="modal-log-header">
+          <div>
+            <h2 class="modal-title" id="jobLogTitle">Transform log</h2>
+            <p class="modal-text" id="jobLogMeta"></p>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-log-close>Close</button>
+        </div>
+        <pre class="log-viewer" id="jobLogBody"></pre>
+      </div>
+    </div>
+    <div class="modal-backdrop" data-oauth-warning-modal aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="oauthWarningTitle">
+        <h2 class="modal-title" id="oauthWarningTitle">Before you continue</h2>
+        <p class="modal-text">Your browser may warn that this connection is not secure. That usually happens because this Google OAuth client has not been verified publicly by Google.</p>
+        <p class="modal-text">If this is your own OAuth configuration, that is expected and you can continue. Never share your API keys, OAuth files, or account access with anyone.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" type="button" data-oauth-warning-cancel>Cancel</button>
+          <button class="btn btn-primary" type="button" data-oauth-warning-continue>Continue</button>
+        </div>
+      </div>
+    </div>
 
     <script>
       window.APP_BOOTSTRAP = {
         connected: {{ 'true' if auth_status.connected else 'false' }},
-        geminiConfigured: {{ 'true' if auth_status.geminiConfigured else 'false' }}
+        geminiConfigured: {{ 'true' if auth_status.geminiConfigured else 'false' }},
+        geminiCostPerImageUsd: {{ '%.3f'|format(gemini_cost_per_image) }},
+        defaultPrompt: {{ default_prompt|tojson }}
       };
     </script>
     <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='oauth-warning.js') }}" defer></script>
   </body>
 </html>

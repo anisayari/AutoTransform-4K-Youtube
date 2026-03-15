@@ -4,6 +4,7 @@
 __pycache__/
 *.pyc
 instance/youtube_token.json
+instance/logs/
 instance/media/downloads/*
 instance/media/generated/*
 !instance/media/downloads/.gitkeep

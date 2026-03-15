@@ -7,6 +7,19 @@ from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+LEGACY_DEFAULT_TRANSFORM_PROMPT = (
+    "Transform this YouTube thumbnail into a sharper, premium, "
+    "high-click-through version. Preserve the main composition, keep "
+    "text readable, improve contrast, color grading, subject separation, "
+    "and face detail. Keep it clean, cinematic, and optimized for a "
+    "16:9 YouTube thumbnail. No watermarks, no borders, no layout "
+    "changes that break the original idea."
+)
+DEFAULT_TRANSFORM_PROMPT = (
+    "Take this exact thumbnail and regenerate the same image in clean 4K. "
+    "Keep the composition, text, layout, colors, and all visible details "
+    "identical. Do not redesign anything. Return only the generated image."
+)
 
 
 def resolve_env_file() -> Path:
@@ -14,6 +27,17 @@ def resolve_env_file() -> Path:
     if not env_file.is_absolute():
         env_file = BASE_DIR / env_file
     return env_file
+
+
+def normalize_gemini_image_size(raw_value: str) -> str:
+    value = raw_value.strip()
+    if not value:
+        return "4K"
+    if value == "512":
+        return value
+    if value.lower().endswith("k"):
+        return f"{value[:-1]}K"
+    return value
 
 
 @dataclass(slots=True)
@@ -28,10 +52,13 @@ class AppConfig:
     gemini_image_model: str
     gemini_image_aspect_ratio: str
     gemini_image_size: str
+    gemini_estimated_cost_per_4k_image_usd: float
     default_transform_prompt: str
     media_root: Path
     downloads_dir: Path
     generated_dir: Path
+    logs_dir: Path
+    app_log_file: Path
     max_videos: int
 
     @classmethod
@@ -67,21 +94,18 @@ class AppConfig:
                 "GEMINI_IMAGE_ASPECT_RATIO",
                 "16:9",
             ).strip(),
-            gemini_image_size=os.getenv("GEMINI_IMAGE_SIZE", "4K").strip(),
-            default_transform_prompt=os.getenv(
-                "DEFAULT_TRANSFORM_PROMPT",
-                (
-                    "Transform this YouTube thumbnail into a sharper, premium, "
-                    "high-click-through version. Preserve the main composition, keep "
-                    "text readable, improve contrast, color grading, subject separation, "
-                    "and face detail. Keep it clean, cinematic, and optimized for a "
-                    "16:9 YouTube thumbnail. No watermarks, no borders, no layout "
-                    "changes that break the original idea."
-                ),
-            ).strip(),
+            gemini_image_size=normalize_gemini_image_size(
+                os.getenv("GEMINI_IMAGE_SIZE", "4K")
+            ),
+            gemini_estimated_cost_per_4k_image_usd=float(
+                os.getenv("GEMINI_ESTIMATED_4K_IMAGE_COST_USD", "0.151")
+            ),
+            default_transform_prompt=resolve_default_transform_prompt(),
             media_root=media_root,
             downloads_dir=media_root / "downloads",
             generated_dir=media_root / "generated",
+            logs_dir=BASE_DIR / "instance" / "logs",
+            app_log_file=BASE_DIR / "instance" / "logs" / "thumbnail_studio.log",
             max_videos=max(1, int(os.getenv("YOUTUBE_MAX_VIDEOS", "18"))),
         )
 
@@ -90,6 +114,7 @@ class AppConfig:
         self.youtube_token_file.parent.mkdir(parents=True, exist_ok=True)
         self.downloads_dir.mkdir(parents=True, exist_ok=True)
         self.generated_dir.mkdir(parents=True, exist_ok=True)
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
 
     @property
     def client_secrets_present(self) -> bool:
@@ -102,3 +127,10 @@ class AppConfig:
     @property
     def setup_complete(self) -> bool:
         return self.client_secrets_present and self.gemini_configured
+
+
+def resolve_default_transform_prompt() -> str:
+    configured = os.getenv("DEFAULT_TRANSFORM_PROMPT", "").strip()
+    if not configured or configured == LEGACY_DEFAULT_TRANSFORM_PROMPT:
+        return DEFAULT_TRANSFORM_PROMPT
+    return configured

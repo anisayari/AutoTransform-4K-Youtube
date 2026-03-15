@@ -233,7 +233,7 @@
               <p class="form-hint mb-md">Once the first two steps are in place, connect your YouTube account and open the studio.</p>
               <div class="setup-final">
                 {% if auth_status.oauthConfigValid %}
-                <a class="btn btn-primary" href="{{ url_for('app.auth_google_start') }}">
+                <a class="btn btn-primary" href="{{ url_for('app.auth_google_start') }}" data-oauth-warning-link>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
                   Connect YouTube
                 </a>
@@ -247,6 +247,18 @@
               </div>
             </div>
           </section>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" data-oauth-warning-modal aria-hidden="true">
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="oauthWarningTitle">
+        <h2 class="modal-title" id="oauthWarningTitle">Before you continue</h2>
+        <p class="modal-text">Your browser may warn that this connection is not secure. That usually happens because this Google OAuth client has not been verified publicly by Google.</p>
+        <p class="modal-text">If this is your own OAuth configuration, that is expected and you can continue. Never share your API keys, OAuth files, or account access with anyone.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" type="button" data-oauth-warning-cancel>Cancel</button>
+          <button class="btn btn-primary" type="button" data-oauth-warning-continue>Continue</button>
         </div>
       </div>
     </div>
@@ -306,5 +318,6 @@
         });
       });
     </script>
+    <script src="{{ url_for('static', filename='oauth-warning.js') }}" defer></script>
   </body>
 </html>

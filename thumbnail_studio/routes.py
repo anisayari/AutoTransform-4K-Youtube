@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from http import HTTPStatus
+import logging
 
 from flask import (
     Blueprint,
@@ -25,6 +26,7 @@ from thumbnail_studio.services.auth import (
     save_credentials,
 )
 from thumbnail_studio.services.gemini import GeminiService
+from thumbnail_studio.services.jobs import TransformJobStore
 from thumbnail_studio.services.setup import (
     delete_google_client_secret,
     reload_settings,
@@ -35,6 +37,8 @@ from thumbnail_studio.services.youtube import YouTubeService
 
 
 bp = Blueprint("app", __name__)
+job_store = TransformJobStore()
+logger = logging.getLogger(__name__)
 
 
 def settings() -> AppConfig:
@@ -51,17 +55,51 @@ def build_transform_result(video_id: str, source_name: str, generation) -> dict[
     return {
         "videoId": video_id,
         "sourceUsed": source_name,
+        "archiveFilename": generation.archive_path.name,
+        "uploadReadyFilename": generation.upload_ready_path.name,
+        "model": generation.model,
+        "notes": getattr(generation, "notes", None),
+    }
+
+
+def serialize_transform_result(result: dict[str, object]) -> dict[str, object]:
+    return {
+        "videoId": result["videoId"],
+        "sourceUsed": result["sourceUsed"],
         "archiveUrl": url_for(
             "app.media_file",
             media_kind="generated",
-            filename=generation.archive_path.name,
+            filename=str(result["archiveFilename"]),
         ),
         "uploadReadyUrl": url_for(
             "app.media_file",
             media_kind="generated",
-            filename=generation.upload_ready_path.name,
+            filename=str(result["uploadReadyFilename"]),
         ),
-        "model": generation.model,
+        "model": result["model"],
+        "notes": result.get("notes"),
+    }
+
+
+def serialize_transform_job(job: dict[str, object]) -> dict[str, object]:
+    return {
+        "jobId": job["jobId"],
+        "status": job["status"],
+        "message": job["message"],
+        "videoIds": job["videoIds"],
+        "currentVideoId": job["currentVideoId"],
+        "currentVideoTitle": job["currentVideoTitle"],
+        "totalCount": job["totalCount"],
+        "completedCount": job["completedCount"],
+        "successCount": job["successCount"],
+        "failureCount": job["failureCount"],
+        "processed": [
+            serialize_transform_result(result) for result in job.get("processed", [])
+        ],
+        "failed": job["failed"],
+        "createdAt": job["createdAt"],
+        "updatedAt": job["updatedAt"],
+        "hasFailures": bool(job["failed"]),
     }
 
 
@@ -103,6 +141,34 @@ def transform_video_with_services(
     return build_transform_result(video_id, source_name, generation)
 
 
+def build_async_transform_runner(app_settings: AppConfig):
+    youtube = None
+    gemini = None
+
+    def run(item: dict[str, object], prompt: str) -> dict[str, object]:
+        nonlocal youtube, gemini
+
+        if youtube is None or gemini is None:
+            credentials = load_credentials(app_settings)
+            if credentials is None or not credentials.valid:
+                raise ValueError(
+                    "YouTube authentication is missing. Connect your Google account first."
+                )
+            youtube = YouTubeService(app_settings, credentials)
+            gemini = GeminiService(app_settings)
+
+        return transform_video_with_services(
+            youtube,
+            gemini,
+            video_id=str(item.get("id", "")).strip(),
+            prompt=prompt,
+            official_thumbnail_url=item.get("officialThumbnailUrl"),
+            pytube_thumbnail_url=item.get("pytubeThumbnailUrl"),
+        )
+
+    return run
+
+
 def setup_feedback() -> tuple[str, str]:
     success_messages = {
         "gemini": "Gemini API key saved.",
@@ -135,6 +201,7 @@ def index():
         "index.html",
         auth_status=status,
         default_prompt=app_settings.default_transform_prompt,
+        gemini_cost_per_image=app_settings.gemini_estimated_cost_per_4k_image_usd,
     )
 
 
@@ -283,6 +350,7 @@ def api_session():
             "defaultPrompt": settings().default_transform_prompt,
             "maxVideos": settings().max_videos,
             "imageModel": settings().gemini_image_model,
+            "geminiCostPerImageUsd": settings().gemini_estimated_cost_per_4k_image_usd,
             "setupComplete": status["setupComplete"],
         }
     )
@@ -326,6 +394,7 @@ def api_transform_video(video_id: str):
         )
 
     try:
+        logger.info("Single transform requested video_id=%s", video_id)
         youtube = YouTubeService(settings(), credentials)
         gemini = GeminiService(settings())
         result = transform_video_with_services(
@@ -337,6 +406,7 @@ def api_transform_video(video_id: str):
             pytube_thumbnail_url=pytube_thumbnail_url,
         )
     except Exception as exc:  # noqa: BLE001
+        logger.exception("Single transform failed video_id=%s", video_id)
         return (
             jsonify({"ok": False, "message": str(exc)}),
             HTTPStatus.BAD_REQUEST,
@@ -346,7 +416,7 @@ def api_transform_video(video_id: str):
         {
             "ok": True,
             "message": "Thumbnail transformed and uploaded to YouTube.",
-            **result,
+            **serialize_transform_result(result),
         }
     )
 
@@ -376,8 +446,10 @@ def api_batch_transform():
         youtube = YouTubeService(settings(), credentials)
         gemini = GeminiService(settings())
     except Exception as exc:  # noqa: BLE001
+        logger.exception("Batch transform setup failed")
         return jsonify({"ok": False, "message": str(exc)}), HTTPStatus.BAD_REQUEST
 
+    logger.info("Batch transform requested count=%s", len(videos))
     processed: list[dict[str, object]] = []
     failed: list[dict[str, str]] = []
 
@@ -403,6 +475,7 @@ def api_batch_transform():
             )
             processed.append(result)
         except Exception as exc:  # noqa: BLE001
+            logger.exception("Batch transform failed video_id=%s", video_id)
             failed.append({"videoId": video_id, "message": str(exc)})
 
     success_count = len(processed)
@@ -418,11 +491,75 @@ def api_batch_transform():
         {
             "ok": True,
             "message": message,
-            "processed": processed,
+            "processed": [serialize_transform_result(result) for result in processed],
             "failed": failed,
             "successCount": success_count,
             "failureCount": failure_count,
             "hasFailures": bool(failed),
+        }
+    )
+
+
+@bp.post("/api/transform-jobs")
+def api_create_transform_job():
+    credentials, error = require_credentials()
+    if error:
+        return error
+
+    payload = request.get_json(silent=True) or {}
+    prompt = (payload.get("prompt") or settings().default_transform_prompt).strip()
+    videos = payload.get("videos") or []
+
+    if not prompt:
+        return (
+            jsonify({"ok": False, "message": "A transformation prompt is required."}),
+            HTTPStatus.BAD_REQUEST,
+        )
+    if not isinstance(videos, list) or not videos:
+        return (
+            jsonify({"ok": False, "message": "Select at least one video to transform."}),
+            HTTPStatus.BAD_REQUEST,
+        )
+
+    try:
+        YouTubeService(settings(), credentials)
+        GeminiService(settings())
+        logger.info("Async transform job requested count=%s", len(videos))
+        job = job_store.create_transform_job(
+            prompt=prompt,
+            videos=videos,
+            runner=build_async_transform_runner(settings()),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Async transform job creation failed")
+        return jsonify({"ok": False, "message": str(exc)}), HTTPStatus.BAD_REQUEST
+
+    estimated_cost = (
+        len(videos) * settings().gemini_estimated_cost_per_4k_image_usd
+    )
+    return (
+        jsonify(
+            {
+                "ok": True,
+                "message": "Transform job queued.",
+                "estimatedCostUsd": round(estimated_cost, 3),
+                **serialize_transform_job(job),
+            }
+        ),
+        HTTPStatus.ACCEPTED,
+    )
+
+
+@bp.get("/api/transform-jobs/<job_id>")
+def api_transform_job_status(job_id: str):
+    job = job_store.get_job(job_id)
+    if job is None:
+        return jsonify({"ok": False, "message": "Transform job not found."}), HTTPStatus.NOT_FOUND
+
+    return jsonify(
+        {
+            "ok": True,
+            **serialize_transform_job(job),
         }
     )
 
