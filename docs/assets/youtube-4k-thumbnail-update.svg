@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">YouTube thumbnail upload limit update</title>
+  <desc id="desc">Announcement card showing that YouTube raised thumbnail uploads from 2 MB to 50 MB, making 4K thumbnails practical.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1400" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#09090B"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="268" y1="372" x2="1132" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E5E7EB"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#60A5FA" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#A78BFA" stop-opacity=".08"/>
+    </linearGradient>
+    <filter id="shadow" x="204" y="318" width="992" height="476" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="32" flood-color="#000000" flood-opacity=".35"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="900" fill="url(#bg)"/>
+  <rect width="1400" height="14" fill="#B91C1C"/>
+  <circle cx="1120" cy="160" r="170" fill="url(#glow)"/>
+  <circle cx="220" cy="760" r="140" fill="url(#glow)"/>
+
+  <g fill="#F9FAFB" font-family="Inter, Arial, sans-serif">
+    <text x="88" y="86" font-size="32" font-weight="700">YouTube thumbnail update</text>
+    <text x="88" y="160" font-size="58" font-weight="700">Uploads now allow up to 50 MB.</text>
+    <text x="88" y="222" font-size="58" font-weight="700">High-resolution 4K thumbnails finally make sense.</text>
+
+    <text x="88" y="310" font-size="28" fill="#D1D5DB">
+      This project now upgrades selected channel thumbnails and prepares a 4K-ready upload
+    </text>
+    <text x="88" y="348" font-size="28" fill="#D1D5DB">
+      instead of squeezing everything back down to the old 2 MB-era limits.
+    </text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="268" y="372" width="864" height="368" rx="34" fill="url(#panel)"/>
+  </g>
+
+  <rect x="312" y="416" width="430" height="156" rx="28" fill="#F3F4F6"/>
+  <rect x="360" y="452" width="164" height="34" rx="10" fill="#111827"/>
+  <rect x="360" y="496" width="132" height="34" rx="10" fill="#111827"/>
+  <rect x="560" y="432" width="112" height="146" rx="20" fill="#F59E0B"/>
+  <circle cx="628" cy="492" r="34" fill="#F9A8D4"/>
+
+  <g fill="#4B5563" font-family="Inter, Arial, sans-serif" text-anchor="middle">
+    <text x="700" y="642" font-size="66" font-weight="600">Thumbnail-4K.jpg</text>
+    <text x="700" y="722" font-size="78" font-weight="800" fill="#4F46E5">48 MB</text>
+  </g>
+
+  <g font-family="Inter, Arial, sans-serif">
+    <rect x="88" y="744" width="188" height="76" rx="22" fill="#111827" stroke="#374151"/>
+    <text x="182" y="792" font-size="44" font-weight="800" text-anchor="middle" fill="#F9FAFB">2 MB</text>
+    <text x="326" y="792" font-size="50" font-weight="700" fill="#9CA3AF">-&gt;</text>
+    <rect x="390" y="744" width="218" height="76" rx="22" fill="#1D4ED8"/>
+    <text x="499" y="792" font-size="44" font-weight="800" text-anchor="middle" fill="#F9FAFB">50 MB</text>
+
+    <text x="1150" y="792" font-size="28" text-anchor="end" fill="#D1D5DB">4K archive + 4K upload-ready output</text>
+  </g>
+</svg>

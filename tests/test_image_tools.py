@@ -24,7 +24,7 @@ def test_prepare_youtube_thumbnail_resizes_and_compresses(tmp_path: Path):
     source = tmp_path / "source.png"
     output = tmp_path / "thumb.jpg"
 
-    Image.new("RGB", (2200, 1600), color=(27, 98, 177)).save(source)
+    Image.new("RGB", (5000, 3000), color=(27, 98, 177)).save(source)
 
     prepare_youtube_thumbnail(source, output)
 

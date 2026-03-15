@@ -1,174 +1,310 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Setup | 4K Thumbnail Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <div class="page-shell">
-      <div class="orb orb-a"></div>
-      <div class="orb orb-b"></div>
+    <div class="app-shell">
+      <header class="topbar">
+        <a href="{{ url_for('app.index') }}" class="topbar-brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2"/>
+            <path d="m10 8 6 4-6 4V8z"/>
+          </svg>
+          <span>4K Thumbnail Studio</span>
+        </a>
+        <div class="topbar-spacer"></div>
+        {% if auth_status.setupComplete %}
+        <a class="btn btn-primary btn-sm" href="{{ url_for('app.index') }}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back to studio
+        </a>
+        {% endif %}
+      </header>
 
-      <div class="setup-layout">
-        <section class="panel setup-hero">
-          <div class="eyebrow">Premiere ouverture</div>
-          <h1>Setup rapide</h1>
-          <p class="hero-copy">
-            Configure Gemini et l'OAuth Google une fois, puis l'app pourra transformer les miniatures
-            choisies et les remettre directement sur ta chaîne YouTube.
-          </p>
+      <div class="setup-shell">
+        <div class="setup-header">
+          <h1>Setup</h1>
+          <p>Connect Gemini and Google OAuth so the app can upgrade thumbnails and push the 4K version back to YouTube.</p>
 
-          {% if setup_message %}
-            <div class="hero-alert hero-alert-success">
-              <strong>{{ setup_message }}</strong>
-            </div>
-          {% endif %}
-
-          {% if setup_error %}
-            <div class="hero-alert">
-              <strong>{{ setup_error }}</strong>
-            </div>
-          {% endif %}
-
-          <div class="status-strip">
-            <span class="pill {{ 'pill-live' if auth_status.geminiConfigured else '' }}">
-              {{ 'Gemini prêt' if auth_status.geminiConfigured else 'Clé Gemini manquante' }}
+          <div class="setup-statuses">
+            <span class="badge {{ 'badge-ok' if auth_status.geminiConfigured else 'badge-warn' }}">
+              <span class="badge-dot"></span>
+              {{ 'Gemini ready' if auth_status.geminiConfigured else 'Gemini key missing' }}
             </span>
-            <span class="pill {{ 'pill-live' if auth_status.clientSecretsPresent else '' }}">
-              {{ 'client_secret.json prêt' if auth_status.clientSecretsPresent else 'client_secret.json manquant' }}
+            <span class="badge {{ 'badge-ok' if auth_status.oauthConfigValid else 'badge-warn' }}">
+              <span class="badge-dot"></span>
+              {% if auth_status.oauthConfigValid %}
+              OAuth ready
+              {% elif auth_status.clientSecretsPresent %}
+              OAuth mismatch
+              {% else %}
+              client_secret.json missing
+              {% endif %}
             </span>
-            <span class="pill {{ 'pill-live' if auth_status.setupComplete else '' }}">
-              {{ 'Setup terminé' if auth_status.setupComplete else 'Setup incomplet' }}
+            <span class="badge {{ 'badge-ok' if auth_status.setupComplete else 'badge-warn' }}">
+              <span class="badge-dot"></span>
+              {{ 'Setup complete' if auth_status.setupComplete else 'Setup incomplete' }}
             </span>
           </div>
+        </div>
 
-          <div class="setup-checklist">
-            <div class="setup-step">
-              <span class="setup-step-index">1</span>
-              <div>
-                <strong>Ajoute ta clé Gemini</strong>
-                <p>Elle sert uniquement à transformer les images.</p>
-              </div>
-            </div>
-            <div class="setup-step">
-              <span class="setup-step-index">2</span>
-              <div>
-                <strong>Uploade ton <code>client_secret.json</code></strong>
-                <p>Le fichier doit venir d'un client OAuth Google de type <em>Web application</em>.</p>
-              </div>
-            </div>
-            <div class="setup-step">
-              <span class="setup-step-index">3</span>
-              <div>
-                <strong>Connecte YouTube</strong>
-                <p>Une fois le setup prêt, tu lances l'OAuth et l'app pourra réuploader sur ta chaîne.</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        {% if setup_message %}
+        <div class="alert alert-success">{{ setup_message }}</div>
+        {% endif %}
 
-        <section class="setup-stack">
-          <section class="panel setup-card">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">Etape 1</p>
-                <h2>Clé Gemini</h2>
+        {% if setup_error %}
+        <div class="alert alert-error">{{ setup_error }}</div>
+        {% endif %}
+
+        <div class="setup-steps">
+          <section class="setup-card {{ 'step-done' if auth_status.geminiConfigured else '' }}">
+            <div class="setup-card-header">
+              <div class="setup-card-header-left">
+                <span class="step-number">1</span>
+                <div>
+                  <div class="step-title">Gemini API key</div>
+                  <div class="step-desc">Used to generate the upgraded 4K thumbnails.</div>
+                </div>
               </div>
-              <span class="pill {{ 'pill-live' if auth_status.geminiConfigured else '' }}">
-                {{ 'Enregistrée' if auth_status.geminiConfigured else 'A enregistrer' }}
+              <span class="badge {{ 'badge-ok' if auth_status.geminiConfigured else '' }}">
+                <span class="badge-dot"></span>
+                {{ 'Configured' if auth_status.geminiConfigured else 'Required' }}
               </span>
             </div>
-
-            <form method="post" action="{{ url_for('app.setup_gemini') }}" class="setup-form">
-              <label class="setup-label" for="gemini_api_key">Gemini API key</label>
-              <input
-                id="gemini_api_key"
-                name="gemini_api_key"
-                class="setup-input"
-                type="password"
-                placeholder="AIza..."
-                autocomplete="off"
-              >
-              <p class="setup-hint">
-                La clé sera enregistrée dans <code>{{ auth_status.envPath }}</code>.
-              </p>
-              <button class="primary-button" type="submit">Enregistrer la clé</button>
-            </form>
+            <div class="setup-card-body">
+              <form method="post" action="{{ url_for('app.setup_gemini') }}">
+                <div class="form-group">
+                  <label class="form-label" for="gemini_api_key">API key</label>
+                  <div class="input-with-action">
+                    <input
+                      id="gemini_api_key"
+                      name="gemini_api_key"
+                      class="form-input"
+                      type="password"
+                      value="{{ auth_status.geminiApiKey if auth_status.geminiConfigured else '' }}"
+                      placeholder="AIza..."
+                      autocomplete="off"
+                      spellcheck="false"
+                    >
+                    <button
+                      class="btn btn-ghost icon-button"
+                      type="button"
+                      data-toggle-password="gemini_api_key"
+                      aria-label="Show Gemini API key"
+                    >
+                      <svg class="icon-show" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      <svg class="icon-hide" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C5 20 1 12 1 12a21.77 21.77 0 0 1 5.06-7.94"/>
+                        <path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a21.8 21.8 0 0 1-3.17 4.69"/>
+                        <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                      </svg>
+                      <span class="sr-only">Toggle Gemini API key visibility</span>
+                    </button>
+                  </div>
+                  {% if auth_status.geminiConfigured %}
+                  <p class="form-hint">Loaded from <code>{{ auth_status.envPath }}</code>. The key stays hidden until you click the eye icon.</p>
+                  {% else %}
+                  <p class="form-hint">Stored in <code>{{ auth_status.envPath }}</code>.</p>
+                  {% endif %}
+                </div>
+                <button class="btn btn-primary" type="submit">{{ 'Update key' if auth_status.geminiConfigured else 'Save key' }}</button>
+              </form>
+            </div>
           </section>
 
-          <section class="panel setup-card">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">Etape 2</p>
-                <h2>OAuth Google</h2>
+          <section class="setup-card {{ 'step-done' if auth_status.oauthConfigValid else '' }}">
+            <div class="setup-card-header">
+              <div class="setup-card-header-left">
+                <span class="step-number">2</span>
+                <div>
+                  <div class="step-title">Google OAuth</div>
+                  <div class="step-desc">Upload the <code>client_secret.json</code> file from Google Cloud Console.</div>
+                </div>
               </div>
-              <span class="pill {{ 'pill-live' if auth_status.clientSecretsPresent else '' }}">
-                {{ 'Fichier trouvé' if auth_status.clientSecretsPresent else 'Fichier manquant' }}
+              <span class="badge {{ 'badge-ok' if auth_status.oauthConfigValid else 'badge-warn' }}">
+                <span class="badge-dot"></span>
+                {{ 'Configured' if auth_status.oauthConfigValid else 'Needs check' }}
               </span>
             </div>
-
-            <div class="setup-info-grid">
-              <div class="setup-info-box">
-                <span class="meta-label">Authorized JavaScript origins</span>
-                <code>{{ auth_status.redirectOrigin }}</code>
+            <div class="setup-card-body">
+              {% if not auth_status.oauthConfigValid %}
+              <div class="info-boxes">
+                <div class="info-box">
+                  <div class="info-box-label">JavaScript origin</div>
+                  <div class="info-box-value">{{ auth_status.redirectOrigin }}</div>
+                </div>
+                <div class="info-box">
+                  <div class="info-box-label">Redirect URI</div>
+                  <div class="info-box-value">{{ auth_status.redirectUri }}</div>
+                </div>
+                <div class="info-box">
+                  <div class="info-box-label">Destination</div>
+                  <div class="info-box-value">{{ auth_status.clientSecretsPath }}</div>
+                </div>
               </div>
-              <div class="setup-info-box">
-                <span class="meta-label">Authorized redirect URIs</span>
-                <code>{{ auth_status.redirectUri }}</code>
-              </div>
-              <div class="setup-info-box">
-                <span class="meta-label">Destination locale</span>
-                <code>{{ auth_status.clientSecretsPath }}</code>
-              </div>
-            </div>
-
-            <form method="post" action="{{ url_for('app.setup_google_client_secret') }}" enctype="multipart/form-data" class="setup-form">
-              <label class="setup-label" for="client_secret_file">Fichier client_secret.json</label>
-              <input id="client_secret_file" name="client_secret_file" class="setup-input setup-file" type="file" accept=".json,application/json">
-              <p class="setup-hint">
-                Dans Google Cloud Console: Credentials -> OAuth 2.0 Client IDs -> télécharge le JSON
-                du client <em>Web application</em>.
-              </p>
-              <button class="primary-button" type="submit">Uploader le fichier OAuth</button>
-            </form>
-          </section>
-
-          <section class="panel setup-card setup-final-card">
-            <div class="panel-header">
-              <div>
-                <p class="panel-kicker">Etape 3</p>
-                <h2>Connexion YouTube</h2>
-              </div>
-            </div>
-
-            <p class="panel-note">
-              Quand les deux blocs au-dessus sont verts, tu peux lancer l'OAuth Google puis ouvrir
-              le studio principal.
-            </p>
-
-            <div class="hero-actions">
+              {% endif %}
               {% if auth_status.clientSecretsPresent %}
-                <a class="primary-button" href="{{ url_for('app.auth_google_start') }}">Connecter YouTube</a>
+              <div class="file-status-card">
+                <div class="file-status-copy">
+                  <div class="file-status-title">{{ auth_status.clientSecretsFilename }}</div>
+                  <div class="file-status-subtitle">Current OAuth client file</div>
+                </div>
+                <div class="oauth-checks">
+                  <span class="badge {{ 'badge-ok' if auth_status.oauthOriginConfigured else 'badge-warn' }}">
+                    <span class="badge-dot"></span>
+                    {{ 'JavaScript origin found' if auth_status.oauthOriginConfigured else 'JavaScript origin missing' }}
+                  </span>
+                  <span class="badge {{ 'badge-ok' if auth_status.oauthRedirectUriConfigured else 'badge-warn' }}">
+                    <span class="badge-dot"></span>
+                    {{ 'Redirect URI found' if auth_status.oauthRedirectUriConfigured else 'Redirect URI missing' }}
+                  </span>
+                </div>
+                <p class="form-hint">{{ auth_status.oauthConfigMessage }}</p>
+                <div class="file-status-actions">
+                  <form method="post" action="{{ url_for('app.setup_google_client_secret_recheck') }}">
+                    <button class="btn btn-secondary" type="submit">Recheck</button>
+                  </form>
+                  <form method="post" action="{{ url_for('app.setup_google_client_secret_reset') }}">
+                    <button class="btn btn-ghost" type="submit">Upload new file</button>
+                  </form>
+                </div>
+              </div>
               {% else %}
-                <button class="primary-button button-disabled" type="button" disabled>
-                  Connecter YouTube
-                </button>
-              {% endif %}
-
-              {% if auth_status.setupComplete %}
-                <a class="ghost-button" href="{{ url_for('app.index') }}">Ouvrir le studio</a>
-              {% else %}
-                <button class="ghost-button button-disabled" type="button" disabled>Ouvrir le studio</button>
+              <form method="post" action="{{ url_for('app.setup_google_client_secret') }}" enctype="multipart/form-data">
+                <div class="form-group">
+                  <label class="form-label" for="client_secret_file">JSON file</label>
+                  <label
+                    class="file-dropzone"
+                    for="client_secret_file"
+                    data-dropzone="client_secret_file"
+                  >
+                    <input
+                      id="client_secret_file"
+                      name="client_secret_file"
+                      class="sr-only"
+                      type="file"
+                      accept=".json,application/json"
+                    >
+                    <span class="file-dropzone-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                    </span>
+                    <span class="file-dropzone-copy">
+                      <strong>Drop `client_secret.json` here</strong>
+                      <span>or click to choose a file</span>
+                    </span>
+                    <span class="file-dropzone-meta" data-file-label="client_secret_file">
+                      No file selected
+                    </span>
+                  </label>
+                  <p class="form-hint">Google Cloud Console -> Credentials -> OAuth 2.0 Client IDs -> download the JSON file for your <em>Web application</em> client.</p>
+                </div>
+                <button class="btn btn-primary" type="submit">Upload JSON</button>
+              </form>
               {% endif %}
             </div>
           </section>
-        </section>
+
+          <section class="setup-card">
+            <div class="setup-card-header">
+              <div class="setup-card-header-left">
+                <span class="step-number">3</span>
+                <div>
+                  <div class="step-title">YouTube connection</div>
+                  <div class="step-desc">Start OAuth, then open the studio.</div>
+                </div>
+              </div>
+            </div>
+            <div class="setup-card-body">
+              <p class="form-hint mb-md">Once the first two steps are in place, connect your YouTube account and open the studio.</p>
+              <div class="setup-final">
+                {% if auth_status.oauthConfigValid %}
+                <a class="btn btn-primary" href="{{ url_for('app.auth_google_start') }}">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                  Connect YouTube
+                </a>
+                {% else %}
+                <button class="btn btn-primary" type="button" disabled>Connect YouTube</button>
+                {% endif %}
+
+                {% if auth_status.connected %}
+                <a class="btn btn-secondary" href="{{ url_for('app.index') }}">Open studio</a>
+                {% endif %}
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        document.querySelectorAll("[data-toggle-password]").forEach((button) => {
+          button.addEventListener("click", () => {
+            const input = document.getElementById(button.dataset.togglePassword);
+            if (!input) return;
+
+            const reveal = input.type === "password";
+            input.type = reveal ? "text" : "password";
+            button.classList.toggle("is-revealed", reveal);
+            button.setAttribute(
+              "aria-label",
+              reveal ? "Hide Gemini API key" : "Show Gemini API key",
+            );
+          });
+        });
+
+        document.querySelectorAll("[data-dropzone]").forEach((dropzone) => {
+          const input = document.getElementById(dropzone.dataset.dropzone);
+          const fileLabel = document.querySelector(`[data-file-label="${dropzone.dataset.dropzone}"]`);
+          if (!input || !fileLabel) return;
+
+          const updateFileLabel = () => {
+            const file = input.files && input.files[0];
+            fileLabel.textContent = file ? file.name : "No file selected";
+          };
+
+          input.addEventListener("change", updateFileLabel);
+
+          ["dragenter", "dragover"].forEach((eventName) => {
+            dropzone.addEventListener(eventName, (event) => {
+              event.preventDefault();
+              dropzone.classList.add("is-dragover");
+            });
+          });
+
+          ["dragleave", "dragend", "drop"].forEach((eventName) => {
+            dropzone.addEventListener(eventName, (event) => {
+              event.preventDefault();
+              if (eventName !== "drop") {
+                dropzone.classList.remove("is-dragover");
+              }
+            });
+          });
+
+          dropzone.addEventListener("drop", (event) => {
+            const files = event.dataTransfer && event.dataTransfer.files;
+            dropzone.classList.remove("is-dragover");
+            if (!files || !files.length) return;
+            input.files = files;
+            updateFileLabel();
+          });
+        });
+      });
+    </script>
   </body>
 </html>

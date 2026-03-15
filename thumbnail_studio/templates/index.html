@@ -1,105 +1,130 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>4K Thumbnail Studio</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
   </head>
   <body>
-    <div class="page-shell">
-      <div class="orb orb-a"></div>
-      <div class="orb orb-b"></div>
-
-      <header class="hero">
-        <div class="eyebrow">YouTube thumbnail pipeline</div>
-        <h1>4K Thumbnail Studio</h1>
-        <p class="hero-copy">
-          Télécharge tes thumbnails YouTube, repasse-les via Gemini image, puis réapplique-les
-          automatiquement sur la vidéo avec l’API officielle.
-        </p>
-
-        <div class="hero-actions">
-          <a class="primary-button" href="{{ url_for('app.auth_google_start') }}">Connecter YouTube</a>
-          <a class="ghost-button" href="{{ url_for('app.setup') }}">Setup</a>
-          <button id="disconnectButton" class="ghost-button" type="button">Déconnecter</button>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2"/>
+            <path d="m10 8 6 4-6 4V8z"/>
+          </svg>
+          <span>4K Thumbnail Studio</span>
         </div>
 
-        <div class="status-strip">
-          <span class="pill {{ 'pill-live' if auth_status.connected else '' }}">
-            {{ 'YouTube connecté' if auth_status.connected else 'YouTube non connecté' }}
+        <div class="topbar-status">
+          <span class="badge {{ 'badge-ok' if auth_status.connected else 'badge-warn' }}">
+            <span class="badge-dot"></span>
+            {{ 'YouTube connected' if auth_status.connected else 'YouTube not connected' }}
           </span>
-          <span class="pill {{ 'pill-live' if auth_status.clientSecretsPresent else '' }}">
-            {{ 'client_secret.json trouvé' if auth_status.clientSecretsPresent else 'client_secret.json manquant' }}
+          <span class="badge {{ 'badge-ok' if auth_status.geminiConfigured else 'badge-warn' }}">
+            <span class="badge-dot"></span>
+            {{ 'Gemini ready' if auth_status.geminiConfigured else 'Gemini missing' }}
           </span>
-          <span class="pill {{ 'pill-live' if auth_status.geminiConfigured else '' }}">
-            {{ 'Gemini configuré' if auth_status.geminiConfigured else 'GEMINI_API_KEY manquant' }}
-          </span>
+        </div>
+
+        <div class="topbar-spacer"></div>
+
+        <div class="topbar-actions">
+          {% if not auth_status.connected %}
+          <a class="btn btn-primary btn-sm" href="{{ url_for('app.auth_google_start') }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            Connect
+          </a>
+          {% endif %}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('app.setup') }}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            Setup
+          </a>
+          {% if auth_status.connected %}
+          <button id="disconnectButton" class="btn btn-ghost btn-sm btn-danger" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Disconnect
+          </button>
+          {% endif %}
         </div>
       </header>
 
-      <main class="layout">
-        <section class="control-panel panel">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Prompt global</p>
-              <h2>Style de transformation</h2>
+      <div class="studio">
+        <aside class="sidebar">
+          <div class="sidebar-section">
+            <div class="sidebar-title">Transformation prompt</div>
+            <textarea id="promptInput" class="prompt-area" placeholder="Describe the 4K thumbnail look you want...">{{ default_prompt }}</textarea>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-title">Selection</div>
+            <div class="selection-bar">
+              <div class="selection-count">
+                <strong id="selectionCount">0</strong> video(s)
+              </div>
+              <div class="selection-actions">
+                <button id="selectVisibleButton" class="btn btn-ghost btn-sm" type="button">Select all</button>
+                <button id="clearSelectionButton" class="btn btn-ghost btn-sm" type="button">Clear</button>
+              </div>
             </div>
-            <div class="panel-actions">
-              <button id="refreshButton" class="ghost-button" type="button">Rafraîchir les vidéos</button>
-              <button id="transformSelectionButton" class="primary-button" type="button">
-                Transformer la sélection
+            <div class="mt-md" style="display:flex;gap:8px">
+              <button id="transformSelectionButton" class="btn btn-primary flex-1" type="button" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                Transform selection
+              </button>
+            </div>
+            <div id="batchProgress" class="mt-md" style="display:none">
+              <div class="progress-bar"><div id="batchProgressFill" class="progress-fill" style="width:0%"></div></div>
+              <div id="batchProgressLabel" class="form-hint mt-sm" style="text-align:center"></div>
+            </div>
+          </div>
+
+          <div class="sidebar-section">
+            <div class="sidebar-title">Pipeline</div>
+            <div class="info-row">
+              <span class="info-label">Source</span>
+              <span class="info-value">YouTube API + pytube</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">AI model</span>
+              <span class="info-value">Gemini</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Upload target</span>
+              <span class="info-value">4K / 50 MB max</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Archive</span>
+              <span class="info-value">4K master</span>
+            </div>
+          </div>
+        </aside>
+
+        <main class="main-area">
+          <div class="main-header">
+            <div>
+              <h1 class="main-title" id="channelTitle">Connection required</h1>
+              <p class="main-subtitle" id="mainSubtitle">Connect your YouTube account to load your videos.</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span id="videoCount" class="main-count">0 videos</span>
+              <button id="refreshButton" class="btn btn-secondary btn-sm" type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Refresh
               </button>
             </div>
           </div>
 
-          <textarea id="promptInput" class="prompt-input">{{ default_prompt }}</textarea>
-
-          <div class="selection-panel">
-            <div>
-              <span class="meta-label">Sélection</span>
-              <strong id="selectionSummary">0 vidéo sélectionnée</strong>
-            </div>
-            <div class="selection-actions">
-              <button id="selectVisibleButton" class="ghost-button" type="button">Tout sélectionner</button>
-              <button id="clearSelectionButton" class="ghost-button" type="button">Vider</button>
-            </div>
-          </div>
-
-          <div class="panel-meta">
-            <div>
-              <span class="meta-label">Flux</span>
-              <strong>API YouTube + fallback pytube + Gemini image</strong>
-            </div>
-            <div>
-              <span class="meta-label">Upload final</span>
-              <strong>1280x720 optimisé pour YouTube</strong>
-            </div>
-          </div>
-
-          <p class="panel-note">
-            Le modèle peut générer un master 4K, mais YouTube accepte surtout un thumbnail léger.
-            L’app garde la version générée et prépare automatiquement une version uploadable.
-          </p>
-        </section>
-
-        <section class="videos-panel panel">
-          <div class="panel-header">
-            <div>
-              <p class="panel-kicker">Vidéos</p>
-              <h2 id="channelTitle">Connexion requise</h2>
-            </div>
-            <span id="videoCount" class="pill">0 vidéo</span>
-          </div>
-
-          <div id="feedback" class="feedback"></div>
-          <div id="videosGrid" class="videos-grid"></div>
-        </section>
-      </main>
+          <div id="videosGrid" class="video-grid"></div>
+        </main>
+      </div>
     </div>
+
+    <div id="toastContainer" class="toast-container"></div>
 
     <script>
       window.APP_BOOTSTRAP = {

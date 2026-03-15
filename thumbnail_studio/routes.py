@@ -18,12 +18,15 @@ from thumbnail_studio.config import AppConfig
 from thumbnail_studio.services.auth import (
     build_oauth_flow,
     clear_credentials,
+    configure_oauth_transport,
     credentials_status,
     load_credentials,
+    oauth_client_config_status,
     save_credentials,
 )
 from thumbnail_studio.services.gemini import GeminiService
 from thumbnail_studio.services.setup import (
+    delete_google_client_secret,
     reload_settings,
     save_gemini_api_key,
     save_google_client_secret,
@@ -102,12 +105,12 @@ def transform_video_with_services(
 
 def setup_feedback() -> tuple[str, str]:
     success_messages = {
-        "gemini": "Clé Gemini enregistrée.",
-        "oauth": "client_secret.json enregistré.",
-        "ready": "La configuration de base est prête. Tu peux connecter YouTube.",
+        "gemini": "Gemini API key saved.",
+        "oauth": "client_secret.json uploaded.",
+        "ready": "Base setup is ready. You can connect YouTube now.",
     }
     error_messages = {
-        "missing_client_secret": "Ajoute d'abord ton fichier OAuth Google.",
+        "missing_client_secret": "Upload your Google OAuth file first.",
     }
 
     success = request.args.get("success", "").strip()
@@ -124,10 +127,10 @@ def setup_feedback() -> tuple[str, str]:
 @bp.get("/")
 def index():
     app_settings = settings()
-    if not app_settings.setup_complete:
+    status = credentials_status(app_settings)
+    if not status["setupComplete"]:
         return redirect(url_for("app.setup"))
 
-    status = credentials_status(app_settings)
     return render_template(
         "index.html",
         auth_status=status,
@@ -141,7 +144,7 @@ def setup():
     message, error_message = setup_feedback()
     return render_template(
         "setup.html",
-        auth_status=credentials_status(app_settings),
+        auth_status=credentials_status(app_settings, include_gemini_secret=True),
         setup_message=message,
         setup_error=error_message,
     )
@@ -155,7 +158,8 @@ def setup_gemini():
     except ValueError as exc:
         return redirect(url_for("app.setup", error_message=str(exc)))
 
-    success = "ready" if refreshed.setup_complete else "gemini"
+    refreshed_status = credentials_status(refreshed)
+    success = "ready" if refreshed_status["setupComplete"] else "gemini"
     return redirect(url_for("app.setup", success=success))
 
 
@@ -167,8 +171,49 @@ def setup_google_client_secret():
     except ValueError as exc:
         return redirect(url_for("app.setup", error_message=str(exc)))
 
-    success = "ready" if refreshed.setup_complete else "oauth"
+    refreshed_status = credentials_status(refreshed)
+    success = "ready" if refreshed_status["setupComplete"] else "oauth"
     return redirect(url_for("app.setup", success=success))
+
+
+@bp.post("/setup/google-client-secret/recheck")
+def setup_google_client_secret_recheck():
+    refreshed = refresh_settings()
+    oauth_config = oauth_client_config_status(refreshed)
+    if not refreshed.client_secrets_present:
+        return redirect(url_for("app.setup", error_message="No uploaded client_secret.json to recheck."))
+
+    if oauth_config["valid"]:
+        return redirect(
+            url_for(
+                "app.setup",
+                message=(
+                    "Current uploaded client_secret.json still matches this app. "
+                    "If you changed Google Cloud settings, download a new file and use Upload new file."
+                ),
+            )
+        )
+    return redirect(
+        url_for(
+            "app.setup",
+            error_message=(
+                f"{oauth_config['message']} "
+                "If you changed the OAuth client in Google Cloud, download a new client_secret.json and upload it here."
+            ),
+        )
+    )
+
+
+@bp.post("/setup/google-client-secret/reset")
+def setup_google_client_secret_reset():
+    delete_google_client_secret(settings())
+    refresh_settings()
+    return redirect(
+        url_for(
+            "app.setup",
+            message="client_secret.json removed. Upload a new file to continue.",
+        )
+    )
 
 
 @bp.get("/auth/google/start")
@@ -178,6 +223,10 @@ def auth_google_start():
         return redirect(
             url_for("app.setup", error="missing_client_secret"),
         )
+
+    oauth_config = oauth_client_config_status(app_settings)
+    if not oauth_config["valid"]:
+        return redirect(url_for("app.setup", error_message=oauth_config["message"]))
 
     try:
         flow = build_oauth_flow(app_settings)
@@ -190,22 +239,37 @@ def auth_google_start():
         return redirect(url_for("app.setup", error_message=str(exc)))
 
     session["oauth_state"] = state
+    session["oauth_code_verifier"] = flow.code_verifier
     return redirect(authorization_url)
 
 
 @bp.get("/auth/google/callback")
 def auth_google_callback():
-    flow = build_oauth_flow(settings(), state=session.get("oauth_state"))
-    flow.fetch_token(authorization_response=request.url)
-    save_credentials(settings().youtube_token_file, flow.credentials)
-    session.pop("oauth_state", None)
-    return redirect(url_for("app.index"))
+    app_settings = settings()
+    configure_oauth_transport(app_settings)
+
+    try:
+        flow = build_oauth_flow(
+            app_settings,
+            state=session.get("oauth_state"),
+            code_verifier=session.get("oauth_code_verifier"),
+        )
+        flow.fetch_token(authorization_response=request.url)
+        save_credentials(app_settings.youtube_token_file, flow.credentials)
+        session.pop("oauth_state", None)
+        session.pop("oauth_code_verifier", None)
+        return redirect(url_for("app.index"))
+    except Exception as exc:  # noqa: BLE001
+        session.pop("oauth_state", None)
+        session.pop("oauth_code_verifier", None)
+        return redirect(url_for("app.setup", error_message=str(exc)))
 
 
 @bp.post("/auth/google/disconnect")
 def auth_google_disconnect():
     clear_credentials(settings().youtube_token_file)
     session.pop("oauth_state", None)
+    session.pop("oauth_code_verifier", None)
     return jsonify({"ok": True})
 
 
@@ -219,7 +283,7 @@ def api_session():
             "defaultPrompt": settings().default_transform_prompt,
             "maxVideos": settings().max_videos,
             "imageModel": settings().gemini_image_model,
-            "setupComplete": settings().setup_complete,
+            "setupComplete": status["setupComplete"],
         }
     )
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -14,10 +15,17 @@ class FakeCredentials:
     valid: bool = True
 
 
+VALID_WEB_CLIENT = (
+    '{"web":{"client_id":"id","client_secret":"secret",'
+    '"redirect_uris":["http://localhost:5001/auth/google/callback"],'
+    '"javascript_origins":["http://localhost:5001"]}}'
+)
+
+
 @pytest.fixture()
 def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     client_secret = tmp_path / "client_secret.json"
-    client_secret.write_text("{}", encoding="utf-8")
+    client_secret.write_text(VALID_WEB_CLIENT, encoding="utf-8")
     env_file = tmp_path / ".env"
     env_file.write_text("", encoding="utf-8")
 
@@ -43,6 +51,42 @@ def test_index_renders(client):
 
     assert response.status_code == 200
     assert b"4K Thumbnail Studio" in response.data
+
+
+def test_setup_prefills_existing_gemini_key_as_hidden_input(client):
+    response = client.get("/setup")
+
+    assert response.status_code == 200
+    assert b'aria-label="Show Gemini API key"' in response.data
+    assert b'value="test-gemini-key"' in response.data
+
+
+def test_setup_hides_dropzone_when_client_secret_already_exists(client):
+    response = client.get("/setup")
+
+    assert response.status_code == 200
+    assert b"Current OAuth client file" in response.data
+    assert b"Recheck" in response.data
+    assert b"Upload new file" in response.data
+    assert b"Drop `client_secret.json` here" not in response.data
+    assert b"<div class=\"info-box-label\">JavaScript origin</div>" not in response.data
+    assert b"<div class=\"info-box-label\">Redirect URI</div>" not in response.data
+    assert b"<div class=\"info-box-label\">Destination</div>" not in response.data
+    assert b"http://localhost:5001/auth/google/callback" not in response.data
+    assert b"/client_secret.json" not in response.data
+    assert b"Open studio" not in response.data
+
+
+def test_setup_shows_open_studio_only_when_youtube_is_connected(
+    client,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr("thumbnail_studio.services.auth.load_credentials", lambda _settings: FakeCredentials())
+
+    response = client.get("/setup")
+
+    assert response.status_code == 200
+    assert b"Open studio" in response.data
 
 
 def test_index_redirects_to_setup_when_project_is_not_configured(
@@ -92,8 +136,42 @@ def test_oauth_start_redirects_with_clear_error_when_client_secret_is_missing(
     response = test_client.get("/auth/google/start", follow_redirects=True)
 
     assert response.status_code == 200
-    assert b"Setup rapide" in response.data
+    assert b"Setup" in response.data
     assert str(missing_secret).encode() in response.data
+
+
+def test_oauth_start_redirects_with_clear_error_when_oauth_config_is_mismatched(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("GEMINI_API_KEY=test-gemini-key\n", encoding="utf-8")
+    client_secret = tmp_path / "client_secret.json"
+    client_secret.write_text(
+        (
+            '{"web":{"client_id":"id","client_secret":"secret",'
+            '"redirect_uris":["http://localhost:9999/auth/google/callback"],'
+            '"javascript_origins":["http://localhost:9999"]}}'
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("APP_ENV_FILE", str(env_file))
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRETS_FILE", str(client_secret))
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:5001/auth/google/callback")
+    monkeypatch.setenv("YOUTUBE_TOKEN_FILE", str(tmp_path / "youtube_token.json"))
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+
+    app = create_app()
+    app.config.update(TESTING=True)
+    test_client = app.test_client()
+
+    response = test_client.get("/auth/google/start", follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b"Missing from client_secret.json" in response.data
+    assert b"http://localhost:5001/auth/google/callback" in response.data
 
 
 def test_api_videos_requires_auth(client):
@@ -196,7 +274,7 @@ def test_setup_gemini_saves_key_in_env_file(
     env_file = tmp_path / ".env"
     env_file.write_text("", encoding="utf-8")
     client_secret = tmp_path / "client_secret.json"
-    client_secret.write_text('{"web":{"client_id":"id","client_secret":"secret"}}', encoding="utf-8")
+    client_secret.write_text(VALID_WEB_CLIENT, encoding="utf-8")
 
     monkeypatch.setenv("APP_ENV_FILE", str(env_file))
     monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret")
@@ -216,7 +294,7 @@ def test_setup_gemini_saves_key_in_env_file(
     )
 
     assert response.status_code == 200
-    assert b"configuration de base est pr" in response.data
+    assert b"Base setup is ready" in response.data
     assert "GEMINI_API_KEY='AIza-test-setup'" in env_file.read_text(encoding="utf-8")
 
 
@@ -243,7 +321,7 @@ def test_setup_google_client_secret_upload_saves_json(
         "/setup/google-client-secret",
         data={
             "client_secret_file": (
-                BytesIO(b'{"web":{"client_id":"id","client_secret":"secret"}}'),
+                BytesIO(VALID_WEB_CLIENT.encode("utf-8")),
                 "client_secret.json",
             ),
         },
@@ -252,5 +330,134 @@ def test_setup_google_client_secret_upload_saves_json(
     )
 
     assert response.status_code == 200
-    assert b"configuration de base est pr" in response.data
+    assert b"Base setup is ready" in response.data
     assert '"client_id": "id"' in client_secret.read_text(encoding="utf-8")
+
+
+def test_setup_google_client_secret_upload_rejects_mismatched_redirects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    env_file = tmp_path / ".env"
+    env_file.write_text("GEMINI_API_KEY=test-gemini-key\n", encoding="utf-8")
+    client_secret = tmp_path / "client_secret.json"
+
+    monkeypatch.setenv("APP_ENV_FILE", str(env_file))
+    monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret")
+    monkeypatch.setenv("GOOGLE_CLIENT_SECRETS_FILE", str(client_secret))
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:5001/auth/google/callback")
+    monkeypatch.setenv("YOUTUBE_TOKEN_FILE", str(tmp_path / "youtube_token.json"))
+    monkeypatch.setenv("GEMINI_API_KEY", "test-gemini-key")
+
+    app = create_app()
+    app.config.update(TESTING=True)
+    test_client = app.test_client()
+
+    response = test_client.post(
+        "/setup/google-client-secret",
+        data={
+            "client_secret_file": (
+                BytesIO(
+                    (
+                        '{"web":{"client_id":"id","client_secret":"secret",'
+                        '"redirect_uris":["http://localhost:6000/auth/google/callback"],'
+                        '"javascript_origins":["http://localhost:6000"]}}'
+                    ).encode("utf-8")
+                ),
+                "client_secret.json",
+            ),
+        },
+        content_type="multipart/form-data",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Missing from client_secret.json" in response.data
+    assert not client_secret.exists()
+
+
+def test_setup_google_client_secret_recheck_reports_current_status(client):
+    response = client.post(
+        "/setup/google-client-secret/recheck",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"Current uploaded client_secret.json still matches this app." in response.data
+
+
+def test_setup_google_client_secret_reset_removes_file_and_restores_dropzone(
+    client,
+    app,
+):
+    response = client.post(
+        "/setup/google-client-secret/reset",
+        follow_redirects=True,
+    )
+
+    assert response.status_code == 200
+    assert b"client_secret.json removed. Upload a new file to continue." in response.data
+    assert b"Drop `client_secret.json` here" in response.data
+
+    with app.app_context():
+        assert not app.config["APP_SETTINGS"].google_client_secrets_file.exists()
+
+
+def test_auth_google_start_stores_code_verifier_in_session(
+    client,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class FakeFlow:
+        code_verifier = "verifier-abc"
+
+        def authorization_url(self, **kwargs):
+            return "https://accounts.google.com/o/oauth2/auth?state=state-123", "state-123"
+
+    monkeypatch.setattr("thumbnail_studio.routes.build_oauth_flow", lambda settings: FakeFlow())
+
+    response = client.get("/auth/google/start", follow_redirects=False)
+
+    assert response.status_code == 302
+    with client.session_transaction() as session:
+        assert session["oauth_state"] == "state-123"
+        assert session["oauth_code_verifier"] == "verifier-abc"
+
+
+def test_auth_google_callback_allows_local_http_transport(
+    client,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    captured: dict[str, str] = {}
+
+    class FakeFlow:
+        credentials = object()
+
+        def fetch_token(self, *, authorization_response):
+            captured["authorization_response"] = authorization_response
+
+    monkeypatch.delenv("OAUTHLIB_INSECURE_TRANSPORT", raising=False)
+    monkeypatch.setattr(
+        "thumbnail_studio.routes.build_oauth_flow",
+        lambda settings, state=None, code_verifier=None: captured.update(
+            {
+                "state": state or "",
+                "code_verifier": code_verifier or "",
+            }
+        ) or FakeFlow(),
+    )
+    monkeypatch.setattr("thumbnail_studio.routes.save_credentials", lambda token_path, credentials: captured.update({"saved": str(token_path)}))
+
+    with client.session_transaction() as session:
+        session["oauth_state"] = "state-123"
+        session["oauth_code_verifier"] = "verifier-abc"
+
+    response = client.get("/auth/google/callback?state=state-123&code=abc123", follow_redirects=False)
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/")
+    assert captured
+    assert captured["state"] == "state-123"
+    assert captured["code_verifier"] == "verifier-abc"
+    assert captured["authorization_response"].startswith("http://localhost/")
+    assert captured["saved"].endswith("youtube_token.json")
+    assert "OAUTHLIB_INSECURE_TRANSPORT" in os.environ
